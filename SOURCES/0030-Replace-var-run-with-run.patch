@@ -1,0 +1,148 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Robbie Harwood <rharwood@redhat.com>
+Date: Mon, 8 Nov 2021 17:58:09 -0500
+Subject: [PATCH] Replace /var/run with /run
+
+This change is in violation of the FHS and is forced by systemd being
+obnoxious and logging warnings about it as if it's some kind of problem.
+
+This commit is a subset of the work in
+02d473fbfd782863a0dcef7e44822d1e7e56a4b3,
+f97d3b04a2eafb42272ede24e1353dd0a7f4347c,
+5f9058677e7241cc88b4e8620654bbaa08a4bce4, and
+cffa10d9b5eec9a9def3533b181a32b64fc29913 (all by pjones) because they
+don't backport well.
+
+Signed-off-by: Robbie Harwood <rharwood@redhat.com>
+---
+ src/daemon.h           |  4 ++--
+ src/Makefile           |  2 +-
+ src/macros.pesign      | 12 ++++++------
+ src/pesign-authorize   |  2 +-
+ src/pesign.service.in  |  2 +-
+ src/pesign.sysvinit.in | 10 +++++-----
+ src/tmpfiles.conf      |  2 +-
+ 7 files changed, 17 insertions(+), 17 deletions(-)
+
+diff --git a/src/daemon.h b/src/daemon.h
+index d97eab9..db42c16 100644
+--- a/src/daemon.h
++++ b/src/daemon.h
+@@ -49,7 +49,7 @@ typedef enum {
+ } pesignd_cmd;
+ 
+ #define PESIGND_VERSION 0x2a9edaf0
+-#define SOCKPATH	"/var/run/pesign/socket"
+-#define PIDFILE		"/var/run/pesign.pid"
++#define SOCKPATH	"/run/pesign/socket"
++#define PIDFILE		"/run/pesign.pid"
+ 
+ #endif /* DAEMON_H */
+diff --git a/src/Makefile b/src/Makefile
+index 7d68fa1..a11e2b4 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -68,7 +68,7 @@ install_sysvinit: pesign.sysvinit
+ install :
+ 	$(INSTALL) -d -m 700 $(INSTALLROOT)/etc/pki/pesign/
+ 	$(INSTALL) -d -m 700 $(INSTALLROOT)/etc/pki/pesign-rh-test/
+-	$(INSTALL) -d -m 770 $(INSTALLROOT)/var/run/pesign/
++	$(INSTALL) -d -m 770 $(INSTALLROOT)/run/pesign/
+ 	$(INSTALL) -d -m 755 $(INSTALLROOT)$(bindir)
+ 	$(INSTALL) -m 755 authvar $(INSTALLROOT)$(bindir)
+ 	$(INSTALL) -m 755 pesign $(INSTALLROOT)$(bindir)
+diff --git a/src/macros.pesign b/src/macros.pesign
+index dfdac02..f135c29 100644
+--- a/src/macros.pesign
++++ b/src/macros.pesign
+@@ -48,17 +48,17 @@
+            "$(uname -m)" == "x86_64" ] &&				\\\
+          grep -q ID=fedora /etc/os-release && 				\\\
+          [[ "%{_buildhost}" =~ ^bkernel.* ]] &&			\\\
+-         ! [ -S /var/run/pesign/socket ]; then				\
++         ! [ -S /run/pesign/socket ]; then				\
+       echo "No socket even though this is %{_buildhost}"		\
+-      ls -ld /var/run/pesign || :					\
+-      getfacl /var/run/pesign || :					\
+-      ls -l /var/run/pesign/socket || :				\
+-      getfacl /var/run/pesign/socket || :				\
++      ls -ld /run/pesign || :					\
++      getfacl /run/pesign || :					\
++      ls -l /run/pesign/socket || :				\
++      getfacl /run/pesign/socket || :				\
+       echo =========== env ==============				\
+       set								\
+       echo =========== env ==============				\
+       exit 1								\
+-    elif [ -S /var/run/pesign/socket ]; then				\
++    elif [ -S /run/pesign/socket ]; then				\
+       %{_pesign_client} -t %{__pesign_client_token}			\\\
+                         -c %{__pesign_client_cert}			\\\
+                         %{-i} %{-o} %{-e} %{-s} %{-C}			\
+diff --git a/src/pesign-authorize b/src/pesign-authorize
+index a496f60..83a30cd 100755
+--- a/src/pesign-authorize
++++ b/src/pesign-authorize
+@@ -47,7 +47,7 @@ update_subdir() {
+ 	done
+ }
+ 
+-for x in /var/run/pesign/ /etc/pki/pesign*/ ; do
++for x in /run/pesign/ /etc/pki/pesign*/ ; do
+ 	if [ -d "${x}" ]; then
+ 		update_subdir "${x}"
+ 	else
+diff --git a/src/pesign.service.in b/src/pesign.service.in
+index c75a000..4ac2199 100644
+--- a/src/pesign.service.in
++++ b/src/pesign.service.in
+@@ -4,6 +4,6 @@ Description=Pesign signing daemon
+ [Service]
+ PrivateTmp=true
+ Type=forking
+-PIDFile=/var/run/pesign.pid
++PIDFile=/run/pesign.pid
+ ExecStart=/usr/bin/pesign --daemonize
+ ExecStartPost=@@LIBEXECDIR@@/pesign/pesign-authorize
+diff --git a/src/pesign.sysvinit.in b/src/pesign.sysvinit.in
+index b0e0f84..bf8edec 100644
+--- a/src/pesign.sysvinit.in
++++ b/src/pesign.sysvinit.in
+@@ -4,7 +4,7 @@
+ #
+ # chkconfig: - 50 50
+ # processname: /usr/bin/pesign
+-# pidfile: /var/run/pesign.pid
++# pidfile: /run/pesign.pid
+ ### BEGIN INIT INFO 
+ # Provides: pesign
+ # Default-Start:
+@@ -20,9 +20,9 @@ RETVAL=0
+ 
+ start(){
+     echo -n "Starting pesign: "
+-    mkdir /var/run/pesign 2>/dev/null &&
+-        chown pesign:pesign /var/run/pesign &&
+-        chmod 0770 /var/run/pesign
++    mkdir /run/pesign 2>/dev/null &&
++        chown pesign:pesign /run/pesign &&
++        chmod 0770 /run/pesign
+     daemon /usr/bin/pesign --daemonize
+     RETVAL=$?
+     echo
+@@ -32,7 +32,7 @@ start(){
+ 
+ stop(){
+     echo -n "Stopping pesign: "
+-    killproc -p /var/run/pesign.pid pesignd
++    killproc -p /run/pesign.pid pesignd
+     RETVAL=$?
+     echo
+     rm -f /var/lock/subsys/pesign
+diff --git a/src/tmpfiles.conf b/src/tmpfiles.conf
+index c1cf355..3375ad5 100644
+--- a/src/tmpfiles.conf
++++ b/src/tmpfiles.conf
+@@ -1 +1 @@
+-D /var/run/pesign 0770 pesign pesign -
++D /run/pesign 0770 pesign pesign -
